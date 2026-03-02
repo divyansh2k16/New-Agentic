@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Env
+.env
+*.env
+
+# Data (don't commit PDFs or vector stores)
+financial_pipeline/data/pdfs/
+financial_pipeline/data/vectorstore/
+financial_pipeline/data/*.db
+data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db

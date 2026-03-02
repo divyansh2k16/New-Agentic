@@ -1,0 +1,57 @@
+version: "3.9"
+
+services:
+  # ── FastAPI Backend ──────────────────────────────────────────────────────────
+  api:
+    build: .
+    container_name: financial_pipeline_api
+    ports:
+      - "8000:8000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+      - SECRET_KEY=${SECRET_KEY:-dev-secret}
+      - DATABASE_URL=sqlite+aiosqlite:///./data/app.db
+      - CHROMA_PERSIST_DIR=/app/data/vectorstore
+      - UPLOAD_DIR=/app/data/pdfs
+    volumes:
+      - ./data:/app/data
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ── Streamlit UI ─────────────────────────────────────────────────────────────
+  ui:
+    build: .
+    container_name: financial_pipeline_ui
+    ports:
+      - "8501:8501"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CHROMA_PERSIST_DIR=/app/data/vectorstore
+      - UPLOAD_DIR=/app/data/pdfs
+    volumes:
+      - ./data:/app/data
+    command: streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # ── Prometheus (optional monitoring) ─────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: financial_pipeline_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    profiles: ["monitoring"]
+    restart: unless-stopped
+
+volumes:
+  data:
