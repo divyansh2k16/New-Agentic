@@ -37,6 +37,13 @@ if "conversation" not in st.session_state:
     st.session_state.conversation = []
 
 
+def _user_session_id() -> str:
+    """Stable session ID derived from the logged-in user's email.
+    Using email means all chunks indexed in past sessions remain queryable."""
+    email = st.session_state.user["email"]
+    return email.replace("@", "_at_").replace(".", "_")
+
+
 def login_page():
     """Simple login form."""
     st.title("Financial PDF Intelligence Pipeline")
@@ -60,6 +67,8 @@ def login_page():
             if user and user["password"] == password:
                 st.session_state.authenticated = True
                 st.session_state.user = {"email": email, "name": user["name"], "role": user["role"]}
+                # Set stable session_id on login so Query Engine works even without re-uploading
+                st.session_state.session_id = email.replace("@", "_at_").replace(".", "_")
                 st.success("Login successful!")
                 st.rerun()
             else:
@@ -85,7 +94,7 @@ def sidebar():
         st.markdown("---")
         if st.session_state.session_id:
             st.success(f"Session active")
-            st.caption(f"ID: {st.session_state.session_id[:8]}...")
+            st.caption(f"User: {st.session_state.user['email']}")
 
         if st.button("Logout", use_container_width=True):
             for key in list(st.session_state.keys()):
@@ -100,11 +109,10 @@ MY_DOCUMENTS_DIR = Path("./data/pdfs/my_documents")
 
 def _run_pipeline_on_paths(file_paths: list, query: str = None):
     """Shared pipeline execution used by both upload tab and local folder tab."""
-    import uuid
     from agents.orchestrator import run_pipeline
     from rag.knowledge_base import ingest_documents_batch
 
-    session_id = str(uuid.uuid4())[:8]
+    session_id = _user_session_id()
     st.session_state.session_id = session_id
 
     progress = st.progress(0, text="Embedding documents into knowledge base...")
@@ -341,9 +349,27 @@ def query_page():
     st.title("Query Engine")
     st.markdown("Ask natural language questions about your uploaded documents.")
 
-    if not st.session_state.get("session_id"):
-        st.info("Please upload and process documents first.")
+    session_id = st.session_state.get("session_id")
+    if not session_id:
+        st.info("Please log in first.")
         return
+
+    # Show how many chunks are already indexed for this user
+    try:
+        from rag.knowledge_base import get_collection
+        collection = get_collection()
+        existing = collection.get(where={"session_id": {"$eq": session_id}}, limit=1)
+        total = collection.count()
+        # Count user-specific chunks via a quick metadata peek
+        user_chunks = collection.get(where={"session_id": {"$eq": session_id}})
+        n_chunks = len(user_chunks["ids"]) if user_chunks and user_chunks.get("ids") else 0
+        if n_chunks > 0:
+            st.success(f"{n_chunks} chunks indexed from your previous sessions — ready to query.")
+        else:
+            st.info("No documents indexed yet. Upload documents on the Upload page first.")
+            return
+    except Exception:
+        pass  # Don't block querying if stats fail
 
     # Display conversation history
     for msg in st.session_state.conversation:
