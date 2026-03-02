@@ -14,14 +14,11 @@ import json
 import re
 from typing import Optional
 from loguru import logger
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from agents.state import FinancialPipelineState, ExtractedFinancials
-from config.settings import get_settings
+from config.llm_factory import get_llm
 from tools.pdf_loader import extract_text_from_pdf, extract_tables_from_pdf
-
-settings = get_settings()
 
 
 EXTRACTION_SYSTEM = """You are a financial data extraction specialist. Extract precise numerical values
@@ -90,11 +87,7 @@ def extractor_node(state: FinancialPipelineState) -> FinancialPipelineState:
     """
     logger.info(f"[EXTRACTOR] Starting extraction for session {state['session_id']}")
 
-    llm = ChatAnthropic(
-        model=settings.primary_llm_model,
-        api_key=settings.anthropic_api_key,
-        max_tokens=1024,
-    )
+    llm = get_llm(model_tier="primary", max_tokens=1024)
 
     extractions = []
     input_tokens_used = 0

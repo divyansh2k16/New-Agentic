@@ -13,14 +13,11 @@ Key patterns:
 """
 import json
 from loguru import logger
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from agents.state import FinancialPipelineState
-from config.settings import get_settings
+from config.llm_factory import get_llm
 from rag.retriever import FinancialRetriever
-
-settings = get_settings()
 
 
 RAG_SYSTEM = """You are a financial document assistant with access to specific company documents.
@@ -102,11 +99,7 @@ def query_agent_node(state: FinancialPipelineState) -> FinancialPipelineState:
             history_messages.append(AIMessage(content=content))
 
     # ── LLM call ─────────────────────────────────────────────────────────────
-    llm = ChatAnthropic(
-        model=settings.primary_llm_model,
-        api_key=settings.anthropic_api_key,
-        max_tokens=800,
-    )
+    llm = get_llm(model_tier="primary", max_tokens=800)
 
     messages = [
         SystemMessage(content=RAG_SYSTEM),

@@ -15,9 +15,14 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # LLM
+    llm_provider: str = "anthropic"  # "anthropic" or "openai"
     anthropic_api_key: str = ""
+    openai_api_key: str = ""
     primary_llm_model: str = "claude-sonnet-4-6"
     fast_llm_model: str = "claude-haiku-4-5-20251001"
+    # OpenAI model equivalents (used when llm_provider="openai")
+    openai_primary_model: str = "gpt-4o"
+    openai_fast_model: str = "gpt-4o-mini"
     embedding_model: str = "all-MiniLM-L6-v2"
 
     # LangSmith

@@ -12,16 +12,13 @@ Key patterns used:
 """
 import json
 from loguru import logger
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
 from pydantic import BaseModel, Field
 from typing import List
 
 from agents.state import FinancialPipelineState, ClassificationResult
-from config.settings import get_settings
+from config.llm_factory import get_llm
 from tools.pdf_loader import extract_text_from_pdf
-
-settings = get_settings()
 
 
 class ClassificationOutput(BaseModel):
@@ -88,11 +85,7 @@ def classifier_node(state: FinancialPipelineState) -> FinancialPipelineState:
     Writes results to state['classifications'].
     """
     logger.info(f"[CLASSIFIER] Starting classification for session {state['session_id']}")
-    llm = ChatAnthropic(
-        model=settings.fast_llm_model,  # Use fast/cheap model for classification
-        api_key=settings.anthropic_api_key,
-        max_tokens=512,
-    )
+    llm = get_llm(model_tier="fast", max_tokens=512)
 
     classifications = []
     input_tokens_used = 0

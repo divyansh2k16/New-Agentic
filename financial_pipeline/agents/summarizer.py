@@ -10,13 +10,10 @@ Key patterns:
 - Audience-aware summary (executive vs technical)
 """
 from loguru import logger
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from agents.state import FinancialPipelineState
-from config.settings import get_settings
-
-settings = get_settings()
+from config.llm_factory import get_llm
 
 
 SUMMARY_SYSTEM = """You are a financial research analyst writing executive summaries for senior management.
@@ -43,11 +40,7 @@ def summarizer_node(state: FinancialPipelineState) -> FinancialPipelineState:
     """
     logger.info(f"[SUMMARIZER] Generating summary for session {state['session_id']}")
 
-    llm = ChatAnthropic(
-        model=settings.primary_llm_model,
-        api_key=settings.anthropic_api_key,
-        max_tokens=1200,
-    )
+    llm = get_llm(model_tier="primary", max_tokens=1200)
 
     # Compile context from all prior agents
     doc_summaries = []

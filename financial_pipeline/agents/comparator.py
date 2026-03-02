@@ -12,13 +12,10 @@ Key patterns:
 """
 import json
 from loguru import logger
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from agents.state import FinancialPipelineState, ComparisonResult, ExtractedFinancials
-from config.settings import get_settings
-
-settings = get_settings()
+from config.llm_factory import get_llm
 
 
 def _pct_change(old: float, new: float) -> float:
@@ -119,11 +116,7 @@ def comparator_node(state: FinancialPipelineState) -> FinancialPipelineState:
     yoy_changes = _compute_yoy(state["extractions"], state["classifications"])
 
     # Step 2: LLM for narrative insights (fast model sufficient)
-    llm = ChatAnthropic(
-        model=settings.fast_llm_model,
-        api_key=settings.anthropic_api_key,
-        max_tokens=600,
-    )
+    llm = get_llm(model_tier="fast", max_tokens=600)
 
     # Build a concise summary of the YoY data for the LLM
     yoy_summary = []
