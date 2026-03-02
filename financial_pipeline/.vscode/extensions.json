@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.black-formatter",
+    "ms-python.vscode-pylance",
+    "ms-toolsai.jupyter",
+    "mikestead.dotenv",
+    "redhat.vscode-yaml",
+    "tamasfe.even-better-toml",
+    "eamodio.gitlens",
+    "ms-azuretools.vscode-docker"
+  ]
+}

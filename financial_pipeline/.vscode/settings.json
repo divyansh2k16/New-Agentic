@@ -1,0 +1,48 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.terminal.activateEnvironment": true,
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.extraPaths": ["${workspaceFolder}"],
+  "python.envFile": "${workspaceFolder}/.env",
+
+  // Linting
+  "python.linting.enabled": true,
+  "python.linting.pylintEnabled": false,
+  "python.linting.flake8Enabled": false,
+
+  // Formatting
+  "editor.formatOnSave": true,
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true
+  },
+
+  // Test discovery
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["tests/", "-v"],
+  "python.testing.unittestEnabled": false,
+
+  // Terminal — opens in project root automatically
+  "terminal.integrated.cwd": "${workspaceFolder}",
+  "terminal.integrated.env.linux": {
+    "PYTHONPATH": "${workspaceFolder}"
+  },
+  "terminal.integrated.env.osx": {
+    "PYTHONPATH": "${workspaceFolder}"
+  },
+  "terminal.integrated.env.windows": {
+    "PYTHONPATH": "${workspaceFolder}"
+  },
+
+  // File associations
+  "files.associations": {
+    "*.env.example": "dotenv",
+    "*.env": "dotenv"
+  },
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/.pytest_cache": true,
+    "**/data/vectorstore": true
+  }
+}

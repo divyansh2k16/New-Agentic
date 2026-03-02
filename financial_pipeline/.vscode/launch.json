@@ -1,0 +1,122 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+
+    // ── 1. Streamlit UI ────────────────────────────────────────────────────
+    {
+      "name": "1. Run Streamlit UI",
+      "type": "python",
+      "request": "launch",
+      "module": "streamlit",
+      "args": ["run", "ui/app.py", "--server.port", "8501"],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+
+    // ── 2. FastAPI Backend ─────────────────────────────────────────────────
+    {
+      "name": "2. Run FastAPI Server",
+      "type": "python",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "api.main:app",
+        "--reload",
+        "--host", "0.0.0.0",
+        "--port", "8000",
+        "--log-level", "info"
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+
+    // ── 3. CLI Pipeline Runner ─────────────────────────────────────────────
+    {
+      "name": "3. Run Pipeline CLI (sample PDFs)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/run_pipeline.py",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+
+    // ── 4. CLI Pipeline with Query ─────────────────────────────────────────
+    {
+      "name": "4. Run Pipeline CLI (with query)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/run_pipeline.py",
+      "args": [
+        "--query", "What was the total revenue in 2023?"
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+
+    // ── 5. Generate Sample PDFs ────────────────────────────────────────────
+    {
+      "name": "5. Generate Sample PDFs",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/generate_sample_pdfs.py",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+
+    // ── 6. Run Tests ───────────────────────────────────────────────────────
+    {
+      "name": "6. Run All Tests",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["tests/", "-v", "--tb=short"],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+
+    // ── 7. Debug current file ──────────────────────────────────────────────
+    {
+      "name": "7. Debug Current File",
+      "type": "python",
+      "request": "launch",
+      "program": "${file}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ],
+
+  // Compound: run both UI and API together
+  "compounds": [
+    {
+      "name": "Full Stack (API + UI)",
+      "configurations": ["2. Run FastAPI Server", "1. Run Streamlit UI"],
+      "stopAll": true
+    }
+  ]
+}

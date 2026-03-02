@@ -18,9 +18,9 @@ financial_pipeline/data/*.db
 data/
 
 # IDE
-.vscode/
 .idea/
 *.swp
+# Note: .vscode/ is committed intentionally (shared launch configs + extensions)
 
 # Testing
 .pytest_cache/
