@@ -399,11 +399,9 @@ def query_page():
             with st.spinner("Searching documents..."):
                 try:
                     from rag.retriever import FinancialRetriever
-                    from langchain_anthropic import ChatAnthropic
                     from langchain_core.messages import SystemMessage, HumanMessage
-                    from config.settings import get_settings
+                    from config.llm_factory import get_llm
 
-                    cfg = get_settings()
                     retriever = FinancialRetriever()
                     chunks = retriever.retrieve(prompt, st.session_state.session_id, k=5)
 
@@ -416,11 +414,7 @@ def query_page():
                             for c in chunks[:4]
                         )
 
-                        llm = ChatAnthropic(
-                            model=cfg.primary_llm_model,
-                            api_key=cfg.anthropic_api_key,
-                            max_tokens=600,
-                        )
+                        llm = get_llm(model_tier="primary", max_tokens=600)
                         response = llm.invoke([
                             SystemMessage(content="Answer only from context. Cite sources [filename, page]."),
                             HumanMessage(content=f"CONTEXT:\n{context}\n\nQUESTION: {prompt}"),
