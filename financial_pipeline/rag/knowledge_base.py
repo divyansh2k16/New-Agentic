@@ -82,8 +82,8 @@ def ingest_document(
     file_hash = meta["file_hash"]
     doc_id = f"{session_id}_{file_hash}"
 
-    # Deduplication check
-    existing = collection.get(where={"file_hash": file_hash, "session_id": session_id})
+    # Deduplication check — look up the first chunk ID directly (avoids multi-key where clause)
+    existing = collection.get(ids=[f"{doc_id}_chunk_0"])
     if existing and existing.get("ids"):
         logger.info(f"[KB] Document already indexed: {meta['filename']} (hash: {file_hash})")
         return {"chunks_added": 0, "doc_id": doc_id, "skipped": True}
@@ -187,9 +187,14 @@ def search(
     collection = get_collection(collection_name)
     query_embedding = embed_query(query)
 
-    where_clause = {"session_id": session_id}
+    # Build where clause — ChromaDB requires $and when combining multiple conditions
     if filter_metadata:
-        where_clause.update(filter_metadata)
+        conditions = [{"session_id": {"$eq": session_id}}]
+        for k_meta, v_meta in filter_metadata.items():
+            conditions.append({k_meta: {"$eq": v_meta}})
+        where_clause = {"$and": conditions}
+    else:
+        where_clause = {"session_id": {"$eq": session_id}}
 
     try:
         results = collection.query(
