@@ -1,11 +1,14 @@
 """
-CLI script to run the full pipeline against sample PDFs.
-Perfect for testing without starting the UI/API.
+CLI script to run the full pipeline against your own PDF files.
+
+DROP YOUR PDFs:  data/pdfs/my_documents/   ← copy files there, then just run this script
 
 Usage:
-  python scripts/run_pipeline.py                           # Run on sample PDFs
-  python scripts/run_pipeline.py --files doc1.pdf doc2.pdf # Run on specific files
+  python scripts/run_pipeline.py                               # all PDFs in my_documents/
+  python scripts/run_pipeline.py --folder path/to/folder       # different folder
+  python scripts/run_pipeline.py --files report1.pdf rep2.pdf  # explicit file list
   python scripts/run_pipeline.py --query "What was net income in 2023?"
+  python scripts/run_pipeline.py --limit 5                     # process first 5 only
 """
 import sys
 import argparse
@@ -24,6 +27,18 @@ from rich.panel import Panel
 from rich.markdown import Markdown
 
 console = Console()
+
+MY_DOCUMENTS_DIR = Path("./data/pdfs/my_documents")
+
+
+def discover_pdfs(folder: Path, limit: int = None) -> list:
+    """Return sorted list of PDF paths from a folder, ignoring non-PDF files."""
+    pdfs = sorted([p for p in folder.glob("*.pdf") if p.is_file()])
+    if not pdfs:
+        return []
+    if limit:
+        pdfs = pdfs[:limit]
+    return [str(p.absolute()) for p in pdfs]
 
 
 def print_results(result: dict):
@@ -102,69 +117,112 @@ def print_results(result: dict):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run Financial PDF Pipeline")
-    parser.add_argument("--files", nargs="+", help="PDF file paths to process")
+    parser = argparse.ArgumentParser(
+        description="Financial PDF Pipeline — drop your PDFs in data/pdfs/my_documents/ and run",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python scripts/run_pipeline.py
+  python scripts/run_pipeline.py --limit 3
+  python scripts/run_pipeline.py --query "What was the net income in 2023?"
+  python scripts/run_pipeline.py --folder ~/Downloads/annual_reports
+  python scripts/run_pipeline.py --files ~/docs/apple_2023.pdf ~/docs/apple_2022.pdf
+        """,
+    )
+    parser.add_argument("--files", nargs="+", help="Explicit PDF file paths")
+    parser.add_argument("--folder", type=str, help="Folder to scan for PDFs (default: data/pdfs/my_documents)")
+    parser.add_argument("--limit", type=int, default=15, help="Max PDFs to process (default: 15)")
     parser.add_argument("--query", type=str, help="Natural language query to run after analysis")
     parser.add_argument("--task", default="full_pipeline",
                         choices=["full_pipeline", "classify", "extract", "query"])
-    parser.add_argument("--session", type=str, help="Session ID (optional)")
+    parser.add_argument("--session", type=str, help="Session ID (optional, auto-generated if omitted)")
     args = parser.parse_args()
 
-    # Determine files to process
+    # ── Resolve file list ─────────────────────────────────────────────────────
     if args.files:
+        # Explicit files passed on command line
         file_paths = []
         for f in args.files:
-            p = Path(f)
+            p = Path(f).expanduser().resolve()
             if not p.exists():
                 console.print(f"[red]File not found: {f}[/red]")
                 sys.exit(1)
-            file_paths.append(str(p.absolute()))
-    else:
-        # Use sample PDFs if they exist
-        sample_dir = Path("./data/pdfs/samples")
-        if not sample_dir.exists() or not list(sample_dir.glob("*.pdf")):
-            console.print("[yellow]No sample PDFs found. Generating...[/yellow]")
-            from scripts.generate_sample_pdfs import main as gen
-            gen()
+            if p.suffix.lower() != ".pdf":
+                console.print(f"[yellow]Skipping non-PDF: {f}[/yellow]")
+                continue
+            file_paths.append(str(p))
 
-        # Take first 4 sample files for a quick demo
-        file_paths = sorted([str(p) for p in sample_dir.glob("*.pdf")])[:4]
-        console.print(f"[green]Using {len(file_paths)} sample PDF(s)[/green]")
+    elif args.folder:
+        # Explicit folder passed
+        folder = Path(args.folder).expanduser().resolve()
+        if not folder.exists():
+            console.print(f"[red]Folder not found: {folder}[/red]")
+            sys.exit(1)
+        file_paths = discover_pdfs(folder, limit=args.limit)
+
+    else:
+        # Default: look in data/pdfs/my_documents/
+        MY_DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+        file_paths = discover_pdfs(MY_DOCUMENTS_DIR, limit=args.limit)
+
+        if not file_paths:
+            console.print(Panel(
+                "[bold yellow]No PDFs found in data/pdfs/my_documents/[/bold yellow]\n\n"
+                "Copy your financial PDF files into:\n"
+                f"  [cyan]{MY_DOCUMENTS_DIR.absolute()}[/cyan]\n\n"
+                "Then re-run this script.\n\n"
+                "Or pass files directly:\n"
+                "  [dim]python scripts/run_pipeline.py --files report1.pdf report2.pdf[/dim]",
+                title="No Documents Found",
+                border_style="yellow",
+            ))
+            sys.exit(0)
 
     if not file_paths:
-        console.print("[red]No PDF files to process[/red]")
+        console.print("[red]No valid PDF files found.[/red]")
         sys.exit(1)
 
+    # ── Summary before running ────────────────────────────────────────────────
     console.print(f"\n[bold]Financial PDF Pipeline[/bold]")
-    console.print(f"Files: {[Path(f).name for f in file_paths]}")
-    console.print(f"Task: {args.task}")
+    console.print(f"Found [cyan]{len(file_paths)}[/cyan] PDF(s) to process:\n")
+    for p in file_paths:
+        size_kb = Path(p).stat().st_size // 1024
+        console.print(f"  [dim]•[/dim] {Path(p).name}  [dim]({size_kb} KB)[/dim]")
     if args.query:
-        console.print(f"Query: {args.query}")
+        console.print(f"\nQuery: [green]{args.query}[/green]")
     console.print()
+
+    # ── Run ───────────────────────────────────────────────────────────────────
+    import uuid
+    session_id = args.session or str(uuid.uuid4())[:8]
 
     try:
         from agents.orchestrator import run_pipeline
         from rag.knowledge_base import ingest_documents_batch
 
-        with console.status("Ingesting documents into knowledge base..."):
-            ingest_results = ingest_documents_batch(file_paths, args.session or "cli-session")
-            total_chunks = sum(r["chunks_added"] for r in ingest_results)
-            console.print(f"[green]Ingested {total_chunks} chunks[/green]")
+        with console.status("[cyan]Embedding documents into knowledge base...[/cyan]"):
+            ingest_results = ingest_documents_batch(file_paths, session_id)
+            new_chunks = sum(r["chunks_added"] for r in ingest_results)
+            skipped = sum(1 for r in ingest_results if r.get("skipped"))
 
-        with console.status("Running multi-agent pipeline..."):
+        if skipped:
+            console.print(f"[dim]Skipped {skipped} already-indexed doc(s) (cached)[/dim]")
+        console.print(f"[green]Ready: {new_chunks} new chunks embedded[/green]")
+
+        with console.status("[cyan]Running multi-agent pipeline...[/cyan]"):
             result = run_pipeline(
                 document_paths=file_paths,
                 task=args.task,
                 query=args.query,
                 user_id="cli_user",
-                session_id=args.session or "cli-session",
+                session_id=session_id,
             )
 
         print_results(result)
 
     except ImportError as e:
         console.print(f"[red]Import error: {e}[/red]")
-        console.print("[yellow]Make sure you have installed requirements: pip install -r requirements.txt[/yellow]")
+        console.print("[yellow]Run: pip install -r requirements.txt[/yellow]")
         sys.exit(1)
     except Exception as e:
         console.print(f"[red]Pipeline failed: {e}[/red]")

@@ -12,6 +12,7 @@ Run with: streamlit run ui/app.py --server.port 8501
 import streamlit as st
 import sys
 import os
+from pathlib import Path
 
 # Add project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -94,84 +95,135 @@ def sidebar():
     return page
 
 
-def upload_page():
-    """Document upload and pipeline trigger."""
-    st.title("Upload Financial Documents")
-    st.markdown("Upload 1-15 annual reports, earnings releases, or trade documents.")
+MY_DOCUMENTS_DIR = Path("./data/pdfs/my_documents")
 
-    uploaded_files = st.file_uploader(
-        "Select PDF files (max 15, 50MB each)",
-        type=["pdf"],
-        accept_multiple_files=True,
+
+def _run_pipeline_on_paths(file_paths: list, query: str = None):
+    """Shared pipeline execution used by both upload tab and local folder tab."""
+    import uuid
+    from agents.orchestrator import run_pipeline
+    from rag.knowledge_base import ingest_documents_batch
+
+    session_id = str(uuid.uuid4())[:8]
+    st.session_state.session_id = session_id
+
+    progress = st.progress(0, text="Embedding documents into knowledge base...")
+    ingest_results = ingest_documents_batch(file_paths, session_id)
+    new_chunks = sum(r["chunks_added"] for r in ingest_results)
+    skipped = sum(1 for r in ingest_results if r.get("skipped"))
+
+    progress.progress(25, text="Running classification agent...")
+    result = run_pipeline(
+        document_paths=file_paths,
+        task="full_pipeline",
+        query=query,
+        user_id=st.session_state.user["email"],
+        session_id=session_id,
     )
+    progress.progress(100, text="Complete!")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        run_query_inline = st.checkbox("Also run a query after processing?")
-    with col2:
+    st.session_state.pipeline_result = result
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Documents processed", len(file_paths))
+    col2.metric("Chunks embedded", new_chunks, delta=f"{skipped} cached" if skipped else None)
+    col3.metric("Steps completed", len(result.get("completed_steps", [])))
+
+    st.success(f"Done! Go to **Analysis Dashboard** or **Query Engine** in the sidebar.")
+    if result.get("errors"):
+        st.warning(f"Warnings: {result['errors']}")
+
+
+def upload_page():
+    """Document upload and pipeline trigger — supports browser upload OR local folder."""
+    st.title("Load Financial Documents")
+
+    tab_upload, tab_folder = st.tabs(["Browser Upload", "Local Folder (copy-paste PDFs here)"])
+
+    # ── Tab 1: browser upload ─────────────────────────────────────────────────
+    with tab_upload:
+        st.markdown("Drag and drop your PDFs below, or click to select.")
+        uploaded_files = st.file_uploader(
+            "Select PDF files (max 15, 50MB each)",
+            type=["pdf"],
+            accept_multiple_files=True,
+            label_visibility="collapsed",
+        )
+
+        run_query_inline = st.checkbox("Also run a query immediately after processing?")
+        query = None
         if run_query_inline:
-            query = st.text_input("Enter your question", placeholder="What was the total revenue in 2023?")
+            query = st.text_input("Question", placeholder="What was the total revenue in 2023?")
+
+        if st.button("Process Uploaded Files", type="primary", disabled=not uploaded_files):
+            if len(uploaded_files) > 15:
+                st.error("Maximum 15 files allowed.")
+                return
+
+            import uuid
+            session_dir = Path("./data/pdfs") / str(uuid.uuid4())[:8]
+            session_dir.mkdir(parents=True, exist_ok=True)
+
+            file_paths = []
+            for f in uploaded_files:
+                dest = session_dir / f.name
+                dest.write_bytes(f.read())
+                file_paths.append(str(dest))
+
+            try:
+                _run_pipeline_on_paths(file_paths, query)
+            except Exception as e:
+                st.error(f"Pipeline failed: {e}")
+                st.exception(e)
+
+    # ── Tab 2: local folder ───────────────────────────────────────────────────
+    with tab_folder:
+        st.markdown(
+            "**Copy your PDF files into the folder below, then click Process.**\n\n"
+            "No uploading needed — the app reads directly from disk."
+        )
+
+        # Show the folder path prominently
+        MY_DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+        st.code(str(MY_DOCUMENTS_DIR.absolute()), language=None)
+
+        # List what's already in the folder
+        pdfs_in_folder = sorted(MY_DOCUMENTS_DIR.glob("*.pdf"))
+
+        if pdfs_in_folder:
+            st.markdown(f"**{len(pdfs_in_folder)} PDF(s) found in folder:**")
+            selected = []
+            for pdf in pdfs_in_folder:
+                size_kb = pdf.stat().st_size // 1024
+                checked = st.checkbox(
+                    f"{pdf.name}  ({size_kb} KB)",
+                    value=True,
+                    key=f"chk_{pdf.name}",
+                )
+                if checked:
+                    selected.append(str(pdf.absolute()))
+
+            if selected:
+                limit = st.slider("Max documents to process", 1, min(15, len(selected)), min(len(selected), 15))
+                selected = selected[:limit]
+
+                run_query_folder = st.checkbox("Also run a query immediately?", key="folder_query_chk")
+                folder_query = None
+                if run_query_folder:
+                    folder_query = st.text_input("Question", key="folder_query_input",
+                                                 placeholder="What was the net income in 2023?")
+
+                if st.button("Process Folder PDFs", type="primary"):
+                    try:
+                        _run_pipeline_on_paths(selected, folder_query)
+                    except Exception as e:
+                        st.error(f"Pipeline failed: {e}")
+                        st.exception(e)
         else:
-            query = None
-
-    if st.button("Process Documents", type="primary", disabled=not uploaded_files):
-        if not uploaded_files:
-            st.warning("Please upload at least one PDF.")
-            return
-
-        if len(uploaded_files) > 15:
-            st.error("Maximum 15 files allowed.")
-            return
-
-        # Save files locally and run pipeline
-        import uuid
-        import tempfile
-        from pathlib import Path
-
-        session_id = str(uuid.uuid4())
-        st.session_state.session_id = session_id
-
-        # Save to temp directory
-        temp_dir = Path("./data/pdfs") / session_id
-        temp_dir.mkdir(parents=True, exist_ok=True)
-
-        file_paths = []
-        for f in uploaded_files:
-            path = temp_dir / f.name
-            path.write_bytes(f.read())
-            file_paths.append(str(path))
-
-        st.info(f"Processing {len(file_paths)} document(s)...")
-
-        progress = st.progress(0, text="Initialising pipeline...")
-
-        try:
-            # Import here to avoid circular imports
-            from agents.orchestrator import run_pipeline
-            from rag.knowledge_base import ingest_documents_batch
-
-            progress.progress(10, text="Ingesting into knowledge base...")
-            ingest_documents_batch(file_paths, session_id)
-
-            progress.progress(25, text="Running classification agent...")
-            result = run_pipeline(
-                document_paths=file_paths,
-                task="full_pipeline",
-                query=query,
-                user_id=st.session_state.user["email"],
-                session_id=session_id,
+            st.info(
+                "No PDFs found yet. Copy your annual reports / financial documents "
+                "into the folder above, then refresh this page."
             )
-            progress.progress(100, text="Complete!")
-
-            st.session_state.pipeline_result = result
-            st.success(f"Pipeline complete! Steps: {', '.join(result.get('completed_steps', []))}")
-
-            if result.get("errors"):
-                st.warning(f"Warnings: {result['errors']}")
-
-        except Exception as e:
-            st.error(f"Pipeline failed: {str(e)}")
-            st.exception(e)
 
 
 def analysis_page():
