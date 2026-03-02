@@ -1,8 +1,2 @@
-from .knowledge_base import ingest_document, ingest_documents_batch, search, get_collection_stats
-from .retriever import FinancialRetriever
-from .embeddings import embed_texts, embed_query
-
-__all__ = [
-    "ingest_document", "ingest_documents_batch", "search", "get_collection_stats",
-    "FinancialRetriever", "embed_texts", "embed_query",
-]
+# Lazy package — import submodules directly to avoid eager import chains.
+# e.g.: from rag.knowledge_base import ingest_document

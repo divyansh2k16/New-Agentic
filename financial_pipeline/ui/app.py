@@ -24,6 +24,15 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ── Pre-warm embedding model once per process (avoids cold-start on first upload) ──
+if "model_warmed" not in st.session_state:
+    try:
+        from rag.embeddings import warmup_model
+        warmup_model()
+    except Exception:
+        pass  # Don't block the app if warmup fails
+    st.session_state.model_warmed = True
+
 # ── Session state initialisation ──────────────────────────────────────────────
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False

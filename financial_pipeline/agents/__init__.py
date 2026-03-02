@@ -1,4 +1,2 @@
-from .orchestrator import run_pipeline, get_pipeline, make_initial_state
-from .state import FinancialPipelineState
-
-__all__ = ["run_pipeline", "get_pipeline", "make_initial_state", "FinancialPipelineState"]
+# Lazy package — import submodules directly to avoid eager import chains.
+# e.g.: from agents.orchestrator import run_pipeline

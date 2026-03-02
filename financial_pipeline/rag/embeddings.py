@@ -27,6 +27,10 @@ settings = get_settings()
 
 _model = None  # Module-level cache — load once, use many times
 
+# Larger batch size → fewer kernel launches → faster throughput on CPU.
+# 64 is safe for all-MiniLM-L6-v2 without excessive memory pressure.
+_EMBED_BATCH_SIZE = 64
+
 
 def get_embedding_model() -> "SentenceTransformer":
     """
@@ -41,6 +45,15 @@ def get_embedding_model() -> "SentenceTransformer":
         _model = SentenceTransformer(settings.embedding_model)
         logger.info(f"[EMBEDDINGS] Model loaded | Dim: {_model.get_sentence_embedding_dimension()}")
     return _model
+
+
+def warmup_model() -> None:
+    """
+    Pre-load the embedding model so the first real request is not penalised.
+    Call this at Streamlit app startup (before any user interaction).
+    """
+    get_embedding_model()
+    logger.info("[EMBEDDINGS] Model warmed up and ready")
 
 
 def embed_texts(texts: List[str]) -> List[List[float]]:
@@ -58,11 +71,11 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
 
     model = get_embedding_model()
 
-    # Batch processing — much faster than one-by-one
+    # Batch processing — larger batch_size reduces per-sample overhead
     embeddings = model.encode(
         texts,
-        batch_size=32,
-        show_progress_bar=len(texts) > 100,
+        batch_size=_EMBED_BATCH_SIZE,
+        show_progress_bar=len(texts) > 200,
         convert_to_numpy=True,
         normalize_embeddings=True,  # Normalise for cosine similarity
     )
